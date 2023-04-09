@@ -45,9 +45,14 @@ echo "<?php
 namespace App\Controller;
 
 use App\Entity\\${class_name};
+use App\Form\\${class_name}FormType;
+use App\Repository\\${class_name}Repository;
+use Doctrine\ORM\EntityManagerInterface;
+use JMS\Serializer\SerializerInterface;
 use Nelmio\ApiDocBundle\Annotation\Model;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 use OpenApi\Annotations as OA;
 
@@ -68,6 +73,8 @@ class ${class_name}Controller extends AbstractController
      *    tags={\"${class_name}s\"},
      *    summary=\"List ${name}s\",
      *    description=\"List ${name}s\",
+     *    @OA\Parameter(ref=\"#/components/parameters/limit\"),
+     *    @OA\Parameter(ref=\"#/components/parameters/offset\"),
      *    @OA\Response(
      *        response=200,
      *        description=\"Success\",
@@ -86,11 +93,21 @@ class ${class_name}Controller extends AbstractController
      *    ),
      * )
      *
+     * @param Request \$request
+     * @param ${class_name}Repository \$repository
+     * @param SerializerInterface \$serializer
      * @return JsonResponse
      */
-    public function listAction(): JsonResponse
+    public function listAction(Request \$request, ${class_name}Repository \$repository, SerializerInterface \$serializer): JsonResponse
     {
-        // TODO: Implement listAction() method.
+        \$${low_class_name}s = \$repository->findBy(
+            [],
+            ['id' => 'DESC'],
+            \$request->query->getInt('limit', 10),
+            \$request->query->getInt('offset', 0)
+        );
+        \$data = \$serializer->serialize(\$${low_class_name}s, 'json', ['groups' => ['${entity_name}:read']]);
+        return \$this->json(\$data, 200, [], ['groups' => ['${entity_name}:read']]);
     }
 
     /**
@@ -122,11 +139,14 @@ class ${class_name}Controller extends AbstractController
      * )
      *
      * @param ${class_name} \$${low_class_name}
+     * @param SerializerInterface \$serializer
+     *
      * @return JsonResponse
      */
-    public function viewAction(${class_name} \$${low_class_name}): JsonResponse
+    public function viewAction(${class_name} \$${low_class_name}, SerializerInterface \$serializer): JsonResponse
     {
-        // TODO: Implement listAction() method.
+        \$data = \$serializer->serialize(\$${low_class_name}, 'json', ['groups' => ['${entity_name}:read']]);
+        return \$this->json(\$data);
     }
 
     /**
@@ -155,11 +175,24 @@ class ${class_name}Controller extends AbstractController
      *        ref=\"#/components/responses/401\"
      *    )
      * )
+     * @param Request \$request
+     * @param ${class_name}Repository \$repository
+     * @param SerializerInterface \$serializer
+     *
      * @return JsonResponse
      */
-    public function createAction(): JsonResponse
+    public function createAction(Request \$request, ${class_name}Repository \$repository, SerializerInterface \$serializer): JsonResponse
     {
-        // TODO: Implement createAction() method.
+        \$${low_class_name} = new ${class_name}();
+        \$form = \$this->createForm(${class_name}FormType::class, \$${low_class_name});
+        \$form->submit(\$request->request->all());
+        if (!\$form->isSubmitted() || !\$form->isValid()) {
+            return \$this->json(\$form->getErrors(), 400);
+        }
+
+        \$repository->save(\$${low_class_name}, true);
+        \$data = \$serializer->serialize(\$${low_class_name}, 'json', ['groups' => ['${entity_name}:read']]);
+        return \$this->json(\$data);
     }
 
     /**
@@ -192,11 +225,23 @@ class ${class_name}Controller extends AbstractController
      *    )
      * )
      * @param ${class_name} \$${low_class_name}
+     * @param Request \$request
+     * @param ${class_name}Repository \$repository
+     * @param SerializerInterface \$serializer
+     *
      * @return JsonResponse
      */
-    public function editAction(${class_name} \$${low_class_name}): JsonResponse
+    public function editAction(${class_name} \$${low_class_name}, Request \$request, ${class_name}Repository \$repository, SerializerInterface \$serializer): JsonResponse
     {
-        // TODO: Implement editAction() method.
+        \$form = \$this->createForm(${class_name}FormType::class, \$${low_class_name});
+        \$form->submit(\$request->request->all());
+        if (!\$form->isSubmitted() || !\$form->isValid()) {
+            return \$this->json(\$form->getErrors(), 400);
+        }
+
+        \$repository->save(\$${low_class_name}, true);
+        \$data = \$serializer->serialize(\$${low_class_name}, 'json', ['groups' => ['${entity_name}:read']]);
+        return \$this->json(\$data);
     }
 
     /**
@@ -227,12 +272,14 @@ class ${class_name}Controller extends AbstractController
      *    )
      * )
      * @param ${class_name} \$${low_class_name}
+     * @param ${class_name}Repository \$repository
      *
      * @return JsonResponse
      */
-    public function deleteAction(${class_name} \$${low_class_name}): JsonResponse
+    public function deleteAction(${class_name} \$${low_class_name}, ${class_name}Repository \$repository): JsonResponse
     {
-        // TODO: Implement deleteAction() method.
+        \$repository->remove(\$${low_class_name}, true);
+        return \$this->json(null, 200);
     }
 }
 "
