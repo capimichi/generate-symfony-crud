@@ -24,7 +24,9 @@ namespace App\Controller;
 use App\Entity\AccessToken;
 use App\Form\AccessTokenFormType;
 use App\Repository\AccessTokenRepository;
+use App\Service\FormService;
 use Doctrine\ORM\EntityManagerInterface;
+use JMS\Serializer\SerializationContext;
 use JMS\Serializer\SerializerInterface;
 use Nelmio\ApiDocBundle\Annotation\Model;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -70,21 +72,26 @@ class AccessTokenController extends AbstractController
      *    ),
      * )
      *
-     * @param Request $request
-     * @param AccessTokenRepository $repository
+     * @param Request             $request
+     * @param AccessTokenRepository   $repository
      * @param SerializerInterface $serializer
+     *
      * @return JsonResponse
      */
     public function listAction(Request $request, AccessTokenRepository $repository, SerializerInterface $serializer): JsonResponse
     {
         $accessTokens = $repository->findBy(
-            [],
+            [
+                'user' => $this->getUser(),
+            ],
             ['id' => 'DESC'],
             $request->query->getInt('limit', 10),
             $request->query->getInt('offset', 0)
         );
-        $data = $serializer->serialize($accessTokens, 'json', ['groups' => ['access_token:read']]);
-        return $this->json($data, 200, [], ['groups' => ['access_token:read']]);
+        $context = new SerializationContext();
+        $context->setGroups(['access_token:read']);
+        $data = json_decode($serializer->serialize($accessTokens, 'json', $context));
+        return $this->json($data, 200);
     }
 
     /**
@@ -115,14 +122,21 @@ class AccessTokenController extends AbstractController
      *    ),
      * )
      *
-     * @param AccessToken $accessToken
+     * @param int                 $accessTokenId
      * @param SerializerInterface $serializer
      *
      * @return JsonResponse
      */
-    public function viewAction(AccessToken $accessToken, SerializerInterface $serializer): JsonResponse
+    public function viewAction(int $accessTokenId, AccessTokenRepository $repository, SerializerInterface $serializer): JsonResponse
     {
-        $data = $serializer->serialize($accessToken, 'json', ['groups' => ['access_token:read']]);
+        $accessToken = $repository->find($accessTokenId);
+        if (!$accessToken || $accessToken->getUser() !== $this->getUser()) {
+            return $this->json(null, 404);
+        }
+
+        $context = new SerializationContext();
+        $context->setGroups(['access_token:read']);
+        $data = json_decode($serializer->serialize($accessToken, 'json', $context), true);
         return $this->json($data);
     }
 
@@ -152,8 +166,8 @@ class AccessTokenController extends AbstractController
      *        ref="#/components/responses/401"
      *    )
      * )
-     * @param Request $request
-     * @param AccessTokenRepository $repository
+     * @param Request             $request
+     * @param AccessTokenRepository   $repository
      * @param SerializerInterface $serializer
      *
      * @return JsonResponse
@@ -163,12 +177,25 @@ class AccessTokenController extends AbstractController
         $accessToken = new AccessToken();
         $form = $this->createForm(AccessTokenFormType::class, $accessToken);
         $form->submit($request->request->all());
+        $accessToken->setUser($this->getUser());
         if (!$form->isSubmitted() || !$form->isValid()) {
-            return $this->json($form->getErrors(), 400);
+            return $this->json([
+                'errors' => FormService::getFormErrors($form),
+            ], 400);
         }
 
-        $repository->save($accessToken, true);
-        $data = $serializer->serialize($accessToken, 'json', ['groups' => ['access_token:read']]);
+        $context = new SerializationContext();
+        $context->setGroups(['access_token:read']);
+        try {
+            $repository->save($accessToken, true);
+        } catch (\Exception $e) {
+            return $this->json([
+                'errors' => [
+                    $e->getMessage(),
+                ],
+            ], 400);
+        }
+        $data = json_decode($serializer->serialize($accessToken, 'json', $context));
         return $this->json($data);
     }
 
@@ -201,23 +228,40 @@ class AccessTokenController extends AbstractController
      *        ref="#/components/responses/401"
      *    )
      * )
-     * @param AccessToken $accessToken
-     * @param Request $request
-     * @param AccessTokenRepository $repository
+     * @param int                 $accessTokenId
+     * @param Request             $request
+     * @param AccessTokenRepository   $repository
      * @param SerializerInterface $serializer
      *
      * @return JsonResponse
      */
-    public function editAction(AccessToken $accessToken, Request $request, AccessTokenRepository $repository, SerializerInterface $serializer): JsonResponse
+    public function editAction(int $accessTokenId, Request $request, AccessTokenRepository $repository, SerializerInterface $serializer): JsonResponse
     {
+        $accessToken = $repository->find($accessTokenId);
+        if (!$accessToken || $accessToken->getUser() !== $this->getUser()) {
+            return $this->json(null, 404);
+        }
         $form = $this->createForm(AccessTokenFormType::class, $accessToken);
         $form->submit($request->request->all());
+        $accessToken->setUser($this->getUser());
         if (!$form->isSubmitted() || !$form->isValid()) {
-            return $this->json($form->getErrors(), 400);
+            return $this->json([
+                'errors' => FormService::getFormErrors($form),
+            ], 400);
         }
 
-        $repository->save($accessToken, true);
-        $data = $serializer->serialize($accessToken, 'json', ['groups' => ['access_token:read']]);
+        try {
+            $repository->save($accessToken, true);
+        } catch (\Exception $e) {
+            return $this->json([
+                'errors' => [
+                    $e->getMessage(),
+                ],
+            ], 400);
+        }
+        $context = new SerializationContext();
+        $context->setGroups(['access_token:read']);
+        $data = json_decode($serializer->serialize($accessToken, 'json', $context), true);
         return $this->json($data);
     }
 
@@ -248,13 +292,17 @@ class AccessTokenController extends AbstractController
      *        ref="#/components/responses/404"
      *    )
      * )
-     * @param AccessToken $accessToken
+     * @param int               $accessTokenId
      * @param AccessTokenRepository $repository
      *
      * @return JsonResponse
      */
-    public function deleteAction(AccessToken $accessToken, AccessTokenRepository $repository): JsonResponse
+    public function deleteAction(int $accessTokenId, AccessTokenRepository $repository): JsonResponse
     {
+        $accessToken = $repository->find($accessTokenId);
+        if (!$accessToken || $accessToken->getUser() !== $this->getUser()) {
+            return $this->json(null, 404);
+        }
         $repository->remove($accessToken, true);
         return $this->json(null, 200);
     }
